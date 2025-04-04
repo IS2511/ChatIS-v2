@@ -199,6 +199,7 @@ var Chat = {
         lastEmoteBackground: ('last_emote_background' in $.QueryString ? ($.QueryString.last_emote_background.toLowerCase() === 'true') : false),
         reverseLineOrder: ('reverse_line_order' in $.QueryString ? ($.QueryString.reverse_line_order.toLowerCase() === 'true') : false),
         horizontal: ('horizontal' in $.QueryString ? ($.QueryString.horizontal.toLowerCase() === 'true') : false),
+        singleChatter: ('single_chatter' in $.QueryString ? $.QueryString.single_chatter.toLowerCase() : ""),
         ttsReadsChat: false,
         emotes: {},
         badges: {},
@@ -2588,6 +2589,11 @@ var Chat = {
                                     && !Chat.info.userBadges[nick]) {
                                     Chat.loadUserBadges(nick, message.tags['user-id']);
                                 }
+                            }
+
+                            if (Chat.info.singleChatter) {
+                                if (Chat.info.singleChatter !== nick.toLowerCase())
+                                    return;
                             }
 
                             Chat.write(nick, message.tags, message.params[1]);
