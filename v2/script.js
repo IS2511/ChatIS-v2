@@ -1,4 +1,4 @@
-const version = '2.34.4+522';
+const version = '2.34.5+528';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -1257,7 +1257,9 @@ var Chat = {
     }, 200),
 
     loadUserBadges: function(nick, userId) {
-        Chat.info.userBadges[nick] = [];
+        console.debug("[ChatIS][badge] Loading badges for", nick, "userId:", userId, "current badges:", Chat.info.userBadges[nick]);
+        if (!Chat.info.userBadges[nick])
+            Chat.info.userBadges[nick] = [];
         $.getJSON('https://api.frankerfacez.com/v1/user/' + nick).always(function(res) {
             if (res.badges) {
                 Object.entries(res.badges).forEach(badge => {
@@ -1272,11 +1274,14 @@ var Chat = {
             }
             Chat.info.ffzapBadges.forEach(user => {
                 if (user.id.toString() === userId) {
-                    var color = '#755000';
-                    if (user.tier == 2) color = (user.badge_color || '#755000');
+                    let color = '#755000';
+                    if (user.tier == 2)
+                        color = (user.badge_color || color);
                     else if (user.tier == 3) {
-                        if (user.badge_is_colored == 0) color = (user.badge_color || '#755000');
-                        else color = false;
+                        if (user.badge_is_colored == 0)
+                            color = (user.badge_color || color);
+                        else
+                            color = false;
                     }
                     var userBadge = {
                         source: 'ffzap',
@@ -1297,14 +1302,19 @@ var Chat = {
                     if (!Chat.info.userBadges[nick].includes(userBadge)) Chat.info.userBadges[nick].push(userBadge);
                 }
             });
+            console.debug("[ChatIS][badge] Applying Chatterino badges", Chat.info.chatterinoBadges);
+            // console.debug("[ChatIS][badge] Applying Chatterino badges to", nick, "userId:", userId);
             Chat.info.chatterinoBadges.forEach(badge => {
+                console.debug("[ChatIS][badge] Checking Chatterino badge kind", badge.tooltip);
                 badge.users.forEach(user => {
+                    console.debug("[ChatIS][badge] Chatterino badge", badge);
                     if (user === userId) {
                         var userBadge = {
                             source: 'chatterino',
                             description: badge.tooltip,
                             url: badge.image3 || badge.image2 || badge.image1
                         };
+                        console.debug("[ChatIS] Possibly applying Chatterino badge to", nick, "badge:", userBadge);
                         if (!Chat.info.userBadges[nick].includes(userBadge)) Chat.info.userBadges[nick].push(userBadge);
                     }
                 });
