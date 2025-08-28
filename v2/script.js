@@ -1,4 +1,4 @@
-const version = '2.34.5+528';
+const version = '2.34.6+531';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -2340,65 +2340,89 @@ var Chat = {
             });
 
             window.addEventListener('obsStreamingStarted', function(event) {
-                Chat.onlineTracker.interval.func('obs', 'obsStreamingStarted');
+                Chat.onlineTracker.sendReport('obs', 'obsStreamingStarted');
             });
             window.addEventListener('obsStreamingStopped', function(event) {
-                Chat.onlineTracker.interval.func('obs', 'obsStreamingStopped');
+                Chat.onlineTracker.sendReport('obs', 'obsStreamingStopped');
             });
             window.addEventListener('obsExit', function(event) {
-                // This could be fast enough, but I have no idea how much time it takes to exit obs.
-                //  And I don't know if there is a way to block obs until the request is finished.
-                //  So this is the "best chance" to shove a request before obs exits.
-                //  This should not be needed anyway since the 'beforeunload' should fire before this.
-                // navigator.sendBeacon(new URL('?'
-                //     + 'channel=' + encodeURIComponent(Chat.info.channel)
-                //     + (Chat.info.channelID ? ('bcId=' + Chat.info.channelID) : '')
-                //     + '&obs=' + (window.obsstudio ? 'true' : 'false')
-                //     + '&uuid=' + encodeURIComponent(Chat.onlineTracker.uuid)
-                //     + '&event=obs' + '&obsEvent=obsExit'
-                //     + '&v=2',
-                //     Chat.onlineTracker.interval.base));
-                // Scratch that, let's try the better case first.
-                Chat.onlineTracker.interval.func('obs', 'obsExit');
-            });
-
-
-            addEventListener("beforeunload", () => {
-                // if (Chat.onlineTracker.enabled)
-                // Still needed even though obsExit exists, obsExit might not be fired if not enough permissions.
-                // This should work even if we have zero permissions, but could result in request spam if user has
-                //  the "Unload when not on screen" flag enabled.
-                // Btw this request is missing the JSON body, but it shouldn't matter.
-                //  The lifetime of the overlay is ending anyway since this is a reload/unload. New UUID, etc.
-                navigator.sendBeacon(new URL('?'
-                    + 'channel=' + encodeURIComponent(Chat.info.channel)
-                    + (Chat.info.channelID ? ('&bcId=' + Chat.info.channelID) : '')
-                    + '&obs=' + (window.obsstudio ? 'true' : 'false')
-                    + '&uuid=' + encodeURIComponent(Chat.onlineTracker.uuid)
-                    + '&event=unload'
-                    + '&v=2',
-                    Chat.onlineTracker.interval.base));
+                // This could be fast enough, but I have no idea how much time it takes to exit OBS.
+                //  And I don't know if there is a way to block OBS until the request is finished.
+                //  So this is the "best chance" to shove a request before OBS exits.
+                //  ~~This should not be needed anyway since the 'beforeunload' should fire before this.~~
+                //  'visibilitychange' should cover this?
+                // Eh, let's just do both.
+                // Looking at real world tests, 'obsExit' seems to never fire...
+                //  I guess 'visibilitychange' is the only one that is compliant with best practices and works semi-reliably.
+                Chat.onlineTracker.sendReport('obs', 'obsExit');
             });
 
         }
 
+        // See:
+        // - [sendBeacon()](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/sendBeacon)
+        // - [Page Visibility API](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API)
+        //
+        // Still needed, 'obsExit' might not be fired due to misconfigured (?) OBS overlay permissions.
+        //  Also works for browsers in general, not just OBS.
+        // This should work even if we have zero permissions, but could result in request spam if user has
+        //  the "Unload when not on screen" flag enabled.
+        // Btw this request is missing the JSON body, but it shouldn't matter.
+        //  The lifetime of the overlay is ending anyway since this is a reload/unload. New UUID, etc.
+        document.addEventListener('visibilitychange', () => {
+            if (Chat.onlineTracker.enabled && window.obsstudio) {
+                if (document.hidden) {
+                    navigator.sendBeacon(Chat.onlineTracker.constructUrl('unload'));
+                }
+            }
+        });
+        window.addEventListener('pagehide', () => {
+            if (Chat.onlineTracker.enabled && !window.obsstudio) {
+                navigator.sendBeacon(Chat.onlineTracker.constructUrl('unload'));
+            }
+        });
+
         Chat.onlineTracker = {};
+        Chat.onlineTracker.enabled = true;
         Chat.onlineTracker.uuidv4 = () => {
             return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
                 (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
             );
         }
         Chat.onlineTracker.uuid = Chat.onlineTracker.uuidv4();
-        Chat.onlineTracker.enabled = true;
-        Chat.onlineTracker.interval = {};
-        Chat.onlineTracker.interval.timout = 1000*60*30; // 30 minutes
-        Chat.onlineTracker.interval.counter = 1;
-        Chat.onlineTracker.interval.start = Date.now();
-        Chat.onlineTracker.interval.base = 'https://chatis.is2511.com/v2/control/report/';
-        Chat.onlineTracker.interval.func = async (eventType, obsEvent) => {
-            if (!Chat.onlineTracker.enabled) return;
-            if (!eventType) eventType = 'timer'; // also possible: 'obs', 'load', 'unload'
-            Chat.onlineTracker.interval.query = '?'
+        Chat.onlineTracker.endpoint = 'https://chatis.is2511.com/v2/control/report/';
+        Chat.onlineTracker.interval = {
+            id: null,
+            timeout: 60 * 60 * 1000, // 1 hour
+            counter: 1,
+            start: Date.now(),
+        };
+        Chat.onlineTracker.collectStats = async () => {
+            return { ChatIS: {
+                version: version,
+                url: window.location.href, // Can be used to extract query and get more consistent config
+                onlineTracker: {
+                    uuid: Chat.onlineTracker.uuid,
+                    loadedOn: Chat.onlineTracker.interval.start,
+                    loadedOnISO: // Maybe remove, only used for human readability of JSON file
+                        (new Date(Chat.onlineTracker.interval.start)).toISOString(),
+                    latestOn: Date.now(),
+                    latestOnISO: (new Date(Date.now())).toISOString(), // Same as above `loadedOnISO`
+                    counter: Chat.onlineTracker.interval.counter, // Maybe useless, not sure yet
+                    interval: Chat.onlineTracker.interval.timeout
+                },
+                obs: (window.obsstudio ? {
+                    pluginVersion: window.obsstudio.pluginVersion,
+                    controlLevel: (await Chat.obs.getControlLevel()),
+                    overlayVisible: Chat.obs.thisVisible,
+                    status: (await Chat.obs.getStatus())
+                } : null),
+            }};
+        };
+        Chat.onlineTracker.constructQuery = (eventType, obsEvent) => {
+            // eventType: 'timer', 'obs', 'load', 'unload'
+            // obsEvent: only if eventType is 'obs', e.g. 'obsStreamingStarted' or 'obsExit'
+            return '?'
                 + 'channel=' + encodeURIComponent(Chat.info.channel)
                 + (Chat.info.channelID ? ('&bcId=' + Chat.info.channelID) : '')
                 + '&obs=' + (window.obsstudio ? 'true' : 'false')
@@ -2406,76 +2430,46 @@ var Chat = {
                 // + '&counter=' + Chat.onlineTracker.interval.counter
                 + '&event=' + eventType
                 + (eventType === 'obs' ? '&obsEvent=' + obsEvent : '')
-                + '&v=2';
-            let url = new URL(Chat.onlineTracker.interval.query, Chat.onlineTracker.interval.base);
-            let init = {};
-            init.method = 'POST';
-            init.headers = new Headers();
-            init.headers.set('User-Agent', 'ChatIS ' + version);
-            init.headers.set('Content-Type', 'application/json');
-            init.body = JSON.stringify({
-                ChatIS: {
-                    version: version,
-                    url: window.location.href, // Can be used to extract query and get more consistent config
-                    onlineTracker: {
-                        uuid: Chat.onlineTracker.uuid,
-                        loadedOn: Chat.onlineTracker.interval.start,
-                        loadedOnISO: // TODO: Should remove, only used for human readability of JSON file
-                            (new Date(Chat.onlineTracker.interval.start)).toISOString(),
-                        latestOn: Date.now(), // TODO: Probably should deprecate, the interval will be huge
-                        latestOnISO: (new Date(Date.now())).toISOString(), // TODO: Same as above `loadedOnISO`
-                        counter: Chat.onlineTracker.interval.counter, // Maybe useless, not sure yet
-                        interval: Chat.onlineTracker.interval.timout
-                    },
-                    obs: (window.obsstudio ? {
-                        pluginVersion: window.obsstudio.pluginVersion,
-                        controlLevel: (await Chat.obs.getControlLevel()),
-                        overlayVisible: Chat.obs.thisVisible,
-                        status: (await Chat.obs.getStatus())
-                    } : null),
-                    config: { // TODO: Remove this, only needed if something can't parse URLs but understands JSON.
-                              //  Or, if something doesn't know the URL scheme of params but can easily infer from this.
-                              //  This could be useful, but needs cleanup and grouping all config params into one var.
-                        channel: Chat.info.channel,
-                        animate: Chat.info.animate,
-                        bots: Chat.info.bots,
-                        hideSpecialBadges: Chat.info.hideSpecialBadges,
-                        fade: Chat.info.fade,
-                        size: Chat.info.size,
-                        font: Chat.info.font,
-                        fontCustom: Chat.info.fontCustom,
-                        stroke: Chat.info.stroke,
-                        shadow: Chat.info.shadow,
-                        smallCaps: Chat.info.smallCaps,
-                        nlAfterName: Chat.info.nlAfterName,
-                        hideNames: Chat.info.hideNames,
-                        markdown: Chat.info.markdown,
-                        md_image: Chat.info.md_image,
-                        botNames: Chat.info.botNames,
-                        showHomies: Chat.info.showHomies,
-                    }
-                },
-            });
-            fetch(url.toString(), init).then(function (response) {
-                if (response.status !== 200) {
-                    let responseJson = '[ERROR]';
-                    try {
-                        responseJson = response.json();
-                    } catch (err) {
-                        // console.error("OnlineTracker: Failed to parse JSON in answer");
-                    }
-                    throw new Error('OnlineTracker error: ' + response.status + " " + response.statusText
-                        + " | JSON: " + responseJson);
-                }
-            })
+                + '&v=2'
+        };
+        Chat.onlineTracker.constructUrl = (eventType, obsEvent) => {
+            return new URL(Chat.onlineTracker.constructQuery(eventType, obsEvent), Chat.onlineTracker.endpoint);
+        };
+        Chat.onlineTracker.sendReport = async (eventType, obsEvent) => {
+            if (!Chat.onlineTracker.enabled) return;
+            const url = Chat.onlineTracker.constructUrl(eventType, obsEvent);
+            const init = {
+                method: 'POST',
+                headers: new Headers({
+                    'Content-Type': 'application/json;charset=UTF-8',
+                    'User-Agent': 'ChatIS/' + version,
+                }),
+                body: JSON.stringify(await Chat.onlineTracker.collectStats())
+            };
+
             if (eventType === 'timer')
                 Chat.onlineTracker.interval.counter += 1;
+
+            const response = await fetch(url, init)
+            if (response.ok) {
+                let responseJson = '[ERROR]';
+                try {
+                    responseJson = await response.json();
+                } catch (err) {
+                    // console.error("OnlineTracker: Failed to parse JSON in answer");
+                }
+                console.error('[ChatIS] OnlineTracker sendReport error: ' + response.status + ' ' + response.statusText
+                    + ' | JSON: ' + responseJson);
+            }
+
         };
-        Chat.onlineTracker.interval.id =
-            setInterval(() => { Chat.onlineTracker.interval.func() },
-                        Chat.onlineTracker.interval.timout);
+        Chat.onlineTracker.interval.id = setInterval(
+            Chat.onlineTracker.sendReport,
+            Chat.onlineTracker.interval.timeout,
+            'timer',
+        );
         // First time connection, "exact" time went online
-        setTimeout(Chat.onlineTracker.interval.func, 1000, 'load');
+        setTimeout(Chat.onlineTracker.sendReport, 5 * 1000, 'load');
 
 
 
