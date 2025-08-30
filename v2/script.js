@@ -1,4 +1,4 @@
-const version = '2.34.6+531';
+const version = '2.34.7+533';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -2451,7 +2451,7 @@ var Chat = {
                 Chat.onlineTracker.interval.counter += 1;
 
             const response = await fetch(url, init)
-            if (response.ok) {
+            if (!response.ok) {
                 let responseJson = '[ERROR]';
                 try {
                     responseJson = await response.json();
