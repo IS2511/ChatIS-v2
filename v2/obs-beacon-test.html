@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>ChatIS OBS beacon test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 600px;
+            margin: auto;
+            padding: 1rem;
+        }
+        .monospace {
+            font-family: monospace;
+            font-size: 1rem;
+        }
+    </style>
+    <script>
+        (async () => {
+            // Generate a nonce in the format `${word}-${word}-${word}` where `word` is a BIP39 word.
+            const nonce = await (async () => {
+                const wordListUrl = 'https://raw.githubusercontent.com/bitcoin/bips/refs/heads/master/bip-0039/english.txt';
+                try {
+                    const wordList = await (await fetch(wordListUrl)).text();
+                    const words = wordList.split('\n');
+                    function randomWord() {
+                        return words[Math.floor(Math.random() * words.length)];
+                    }
+                    return `${randomWord()}-${randomWord()}-${randomWord()}`;
+                } catch (err) {
+                    // Fallback if the word list can't be fetched.
+                    return `${Math.random().toString(10).substring(2, 6)}-${Math.random().toString(10).substring(2, 6)}-${Math.random().toString(10).substring(2, 6)}`;
+                }
+            })();
+
+            const beeceptorConsole = `app.beeceptor.com/console/${nonce}`;
+            const beeceptorBeaconUrl = `https://${nonce}.free.beeceptor.com`;
+
+            document.getElementById("beeceptor-url").textContent = beeceptorConsole;
+            document.getElementById("beeceptor-url").href = `https://${beeceptorConsole}`;
+
+            function sendReport(eventType) {
+                navigator.sendBeacon(
+                    `${beeceptorBeaconUrl}/${eventType}`,
+                    JSON.stringify({
+                        eventType: eventType,
+                        hidden: document.hidden,
+                    })
+                );
+            }
+
+            document.addEventListener("visibilitychange", () => {
+                sendReport("visibilitychange");
+            });
+            window.addEventListener("pagehide", () => {
+                sendReport("pagehide");
+            });
+            window.addEventListener("beforeunload", () => {
+                sendReport("beforeunload");
+            });
+
+            if (window.obsstudio) {
+                window.addEventListener("obsExit", function(event) {
+                    sendReport("obsExit");
+                });
+            }
+        })();
+    </script>
+</head>
+<body>
+    <h2>ChatIS OBS beacon test</h2>
+    <p>
+        This page tries to send a beacon on overlay unload/exit.
+        Used for testing what works for metrics on OBS exit (when user closes OBS window or <span class="monospace">Ctrl+Q</span>'s OBS).
+    </p>
+    <p>Events this page tries: <span class="monospace">document.visibilitychange, window.pagehide, window.beforeunload, window.obsExit</span></p>
+    <p>Your URL: <a id="beeceptor-url" class="monospace">...</a></p>
+</body>
+</html>
