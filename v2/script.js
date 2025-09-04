@@ -1,4 +1,4 @@
-const version = '2.34.7+533';
+const version = '2.34.8+534';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -268,6 +268,12 @@ var Chat = {
                 'tipo_lon',
                 'murgois',
             ])
+        },
+        noPersonalEmotes: {
+            channels: new Set([
+                'feelssunnyman',
+                'kaicenat',
+            ]),
         },
         cheers: {},
         lines: []
@@ -620,8 +626,10 @@ var Chat = {
                     const emotesUpdated = (data.body.updated || []);
                     // showFloat(9, '7TV emote update!', 2*1000);
                     for (const emote of emotesUpdated) {
-                        delete Chat.info.emotes[emote.old_value.name];
-                        Chat.info.emotes[emote.value.name] = Chat.stv.emoteToChatisEmote(emote.value.data, false);
+                        if (!Chat.info.noPersonalEmotes.channels.has(Chat.info.channel) || (data.body.id === Chat.stv.channelEmoteSetId)) {
+                            delete Chat.info.emotes[emote.old_value.name];
+                            Chat.info.emotes[emote.value.name] = Chat.stv.emoteToChatisEmote(emote.value.data, false);
+                        }
                         if (data.body.id === Chat.stv.channelEmoteSetId) // Updates are about the channel emote set
                             showFloat(9, '7TV emote update!\n' + 'UPDATE:\n'
                                 + strmax(emote.old_value.name, 13) + ' ->\n' + strmax(emote.value.name, 16),
@@ -629,14 +637,18 @@ var Chat = {
                     }
 
                     for (const emote of emotesRemoved) {
-                        // console.log("[ChatIS][7tv] EventAPI emote remove:", emote.name);
-                        delete Chat.info.emotes[emote.name];
+                        if (!Chat.info.noPersonalEmotes.channels.has(Chat.info.channel) || (data.body.id === Chat.stv.channelEmoteSetId)) {
+                            // console.log("[ChatIS][7tv] EventAPI emote remove:", emote.name);
+                            delete Chat.info.emotes[emote.name];
+                        }
                         if (data.body.id === Chat.stv.channelEmoteSetId) // Updates are about the channel emote set
                             showFloat(9, '7TV emote update!\n' + 'REMOVE:\n' + strmax(emote.name, 16), 3*1000);
                     }
                     for (const emote of emotesAdded) {
-                        // console.log("[ChatIS][7tv] EventAPI emote add:", emote.name, " ", Chat.stv.emoteToChatisEmote(emote, false));
-                        Chat.info.emotes[emote.name] = Chat.stv.emoteToChatisEmote(emote, false);
+                        if (!Chat.info.noPersonalEmotes.channels.has(Chat.info.channel) || (data.body.id === Chat.stv.channelEmoteSetId)) {
+                            // console.log("[ChatIS][7tv] EventAPI emote add:", emote.name, " ", Chat.stv.emoteToChatisEmote(emote, false));
+                            Chat.info.emotes[emote.name] = Chat.stv.emoteToChatisEmote(emote, false);
+                        }
                         if (data.body.id === Chat.stv.channelEmoteSetId) // Updates are about the channel emote set
                             showFloat(9, '7TV emote update!\n' + 'ADD:\n' + strmax(emote.name, 16), 3*1000);
                     }
