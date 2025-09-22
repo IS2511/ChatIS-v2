@@ -1,4 +1,4 @@
-const version = '2.34.8+534';
+const version = '2.34.9+535';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -96,6 +96,7 @@ function makeFunction(code) {
 const wsCloseCodesPrecursor = [
     [1000, 'OK'],
     [1005, 'NO_CODE_PROVIDED'],
+    [1006, 'CLOSED_ABNORMALLY'],
 
     // ChatIS
     [4101, 'CHATIS_RECONNECTING'],
@@ -555,6 +556,25 @@ var Chat = {
                         case codes.SERVER_ERROR:
                         case codes.RESTART: {
                             Chat.stv.eventApi.reconnect.now(true, `closed with ${codeToStr(event.code)}`);
+                        } break;
+                        // CLOSED_ABNORMALLY:
+                        // HTTP to WS upgrade failure, network issue, etc.
+                        // Any non-OK HTTP code (usually means upgrade failure) is 1006 (CLOSED_ABNORMALLY)
+                        // 7tv replies with HTTP 429 Too Many Requests, instead of a proper custom WS close code
+                        // Probing for an HTTP code with a GET requests results in 503 Service Unavailable and Cloudflare error 1200
+                        // Thanks 7tv
+                        case codes.CLOSED_ABNORMALLY: {
+                            // Probe the endpoint with HTTP GET to see if we need to backoff
+                            fetch(`https://events.7tv.io/v3`).catch((err) => {
+                                console.warn("[ChatIS][7tv] EventAPI WS HTTP fetch error:", err);
+                                Chat.stv.eventApi.reconnect.after(false, 70 * 1000, 10 * 1000, `closed with ${codeToStr(event.code)}`);
+                            }).then((response) => {
+                                if (response && (response.status === 503 || response.status === 429)) {
+                                    Chat.stv.eventApi.reconnect.after(false, 70 * 1000, 10 * 1000, `closed with ${codeToStr(event.code)} - HTTP says rate limited`);
+                                } else {
+                                    Chat.stv.eventApi.reconnect.after(true, 20 * 1000, 10 * 1000, `closed with ${codeToStr(event.code)}`);
+                                }
+                            });
                         } break;
                         case codes.RATE_LIMITED:
                         case codes.MAINTENANCE: {
