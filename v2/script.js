@@ -1,4 +1,4 @@
-const version = '2.34.9+535';
+const version = '2.34.10+536';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -274,6 +274,7 @@ var Chat = {
             channels: new Set([
                 'feelssunnyman',
                 'kaicenat',
+                'xqc',
             ]),
         },
         cheers: {},
