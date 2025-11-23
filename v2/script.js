@@ -1,4 +1,4 @@
-const version = '2.34.13+539';
+const version = '2.35.0+540';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -130,6 +130,63 @@ const styleSettingsMap = {
     shadow: ['small', 'medium', 'large'],
 };
 
+const stvApiV3EmoteFlags = {
+    PRIVATE: 1 << 0,
+    AUTHENTIC: 1 << 1,
+    ZERO_WIDTH: 1 << 8,
+    SEXUAL: 1 << 16,
+    EPILEPSY: 1 << 17,
+    EDGY: 1 << 18,
+    TWITCH_DISALLOWED: 1 << 24,
+}
+function stvV3EmoteFlagsParse(bitmask) {
+    return {
+        PRIVATE: (bitmask & stvApiV3EmoteFlags.PRIVATE) !== 0,
+        AUTHENTIC: (bitmask & stvApiV3EmoteFlags.AUTHENTIC) !== 0,
+        ZERO_WIDTH: (bitmask & stvApiV3EmoteFlags.ZERO_WIDTH) !== 0,
+        SEXUAL: (bitmask & stvApiV3EmoteFlags.SEXUAL) !== 0,
+        EPILEPSY: (bitmask & stvApiV3EmoteFlags.EPILEPSY) !== 0,
+        EDGY: (bitmask & stvApiV3EmoteFlags.EDGY) !== 0,
+        TWITCH_DISALLOWED: (bitmask & stvApiV3EmoteFlags.TWITCH_DISALLOWED) !== 0,
+    }
+}
+
+const stvApiV3ActiveEmote = {
+    ZERO_WIDTH: 1 << 0,
+    OVERRIDE_TWITCH_GLOBAL: 1 << 16,
+    OVERRIDE_TWITCH_SUBSCRIBER: 1 << 17,
+    OVERRIDE_BETTER_TTV: 1 << 18,
+}
+function stvV3ActiveEmoteFlagsParse(bitmask) {
+    return {
+        ZERO_WIDTH: (bitmask & stvApiV3ActiveEmote.ZERO_WIDTH) !== 0,
+        OVERRIDE_TWITCH_GLOBAL: (bitmask & stvApiV3ActiveEmote.OVERRIDE_TWITCH_GLOBAL) !== 0,
+        OVERRIDE_TWITCH_SUBSCRIBER: (bitmask & stvApiV3ActiveEmote.OVERRIDE_TWITCH_SUBSCRIBER) !== 0,
+        OVERRIDE_BETTER_TTV: (bitmask & stvApiV3ActiveEmote.OVERRIDE_BETTER_TTV) !== 0,
+    }
+}
+
+// const stvApiV4EmoteFlags = {
+//     PUBLIC_LISTED: 1 << 0,
+//     PRIVATE: 1 << 1,
+//     NSFW: 1 << 2,
+//     DEFAULT_ZERO_WIDTH: 1 << 3,
+//     APPROVED_PERSONAL: 1 << 4,
+//     DENIED_PERSONAL: 1 << 5,
+//     ANIMATED: 1 << 6,
+// }
+// function stvV4EmoteFlagsParse(bitmask) {
+//     return {
+//         PUBLIC_LISTED: (bitmask & stvApiV4EmoteFlags.PUBLIC_LISTED) !== 0,
+//         PRIVATE: (bitmask & stvApiV4EmoteFlags.PRIVATE) !== 0,
+//         NSFW: (bitmask & stvApiV4EmoteFlags.NSFW) !== 0,
+//         DEFAULT_ZERO_WIDTH: (bitmask & stvApiV4EmoteFlags.DEFAULT_ZERO_WIDTH) !== 0,
+//         APPROVED_PERSONAL: (bitmask & stvApiV4EmoteFlags.APPROVED_PERSONAL) !== 0,
+//         DENIED_PERSONAL: (bitmask & stvApiV4EmoteFlags.DENIED_PERSONAL) !== 0,
+//         ANIMATED: (bitmask & stvApiV4EmoteFlags.ANIMATED) !== 0,
+//     }
+// }
+
 function parseSemver(version) {
     // Based on https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
     const semverRegex = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
@@ -202,7 +259,10 @@ var Chat = {
         horizontal: ('horizontal' in $.QueryString ? ($.QueryString.horizontal.toLowerCase() === 'true') : false),
         singleChatter: ('single_chatter' in $.QueryString ? $.QueryString.single_chatter.toLowerCase() : ""),
         ttsReadsChat: false,
-        emotes: {},
+        // Map<name: string, emote: ChatisEmote>
+        emotes: new Map(),
+        // Map<username: string, Map<name: string, emote: ChatisEmote>>
+        personalEmotes: new Map(),
         badges: {},
         userBadges: {},
         ffzapBadges: null,
@@ -288,6 +348,10 @@ var Chat = {
         lastEmoteInMessage: null,
         lastEmoteInMessageLink: null,
         perms: {},
+        stv: {
+            userIdToUsername: new Map(),
+            emoteSetIdToOwnerUsername: new Map(),
+        }
     },
     flags: {
         usingHackyStrokeViaShadow: false,
@@ -296,6 +360,21 @@ var Chat = {
     // Called by img elements with the zerowidth class
     zw: function (elem) {
         $(elem).css('margin-left', '-' + (elem.clientWidth) + 'px');
+    },
+
+    addPersonalEmote: function (username, name, emote) {
+        if (!Chat.info.personalEmotes.has(username)) {
+            Chat.info.personalEmotes.set(username, new Map());
+        }
+        Chat.info.personalEmotes.get(username).set(name, emote);
+    },
+    removePersonalEmote: function (username, name) {
+        Chat.info.personalEmotes.get(username).delete(name);
+    },
+    getPersonalEmotesForUser: function (username) {
+        if (Chat.info.personalEmotes.has(username))
+            return Chat.info.personalEmotes.get(username);
+        return new Map();
     },
 
 
@@ -611,7 +690,7 @@ var Chat = {
             
         },
 
-        handleDispatchEvent: function (event) {
+        handleDispatchEvent: async function (event) {
             const data = event.d;
             console.debug("[ChatIS][7tv] EventAPI, DISPATCH full:", data);
 
@@ -647,41 +726,62 @@ var Chat = {
             //         break;
             // }
 
+            // TODO: Handle channel emote set switches? (activating a different emote set for the channel)
+            //   Currently not handled. A quick and dirty way would be to just reload the page...
+            //   But ideally we would fetch the new emote set and update emotes accordingly,
+            //   plus resubscribe to the new emote set updates and unsubscribe from the old one.
+
             switch (data.type) {
                 case 'emote_set.create': {
                     // console.debug("[ChatIS][7tv] EventAPI DISPATCH emote_set.create:", data.body);
                 } break;
                 case 'emote_set.update': {
-                    const emotesRemoved = (data.body.pulled || []).map(obj => obj.old_value);
-                    const emotesAdded = (data.body.pushed || []).map(obj => obj.value.data);
+                    const emoteSetId = data.body.id;
+                    // const actorUsername = data.body.actor ? data.body.actor.username : null;
                     const emotesUpdated = (data.body.updated || []);
+                    const emotesRemoved = (data.body.pulled || []).map(obj => obj.old_value);
+                    const emotesAdded = (data.body.pushed || []).map(obj => obj.value);
+                    // Fun fact: we don't subscribe to personal emote set updates, so they only ever get one update - 'pushed' on user presence in chat
+                    // Also, this is not exactly an accurate check for a personal emote set, it breaks if the channel changes active emote set to a different one
+                    const personalEmoteSet = emoteSetId !== Chat.stv.channelEmoteSetId;
                     // showFloat(9, '7TV emote update!', 2*1000);
-                    for (const emote of emotesUpdated) {
-                        if (!Chat.info.noPersonalEmotes.channels.has(Chat.info.channel) || (data.body.id === Chat.stv.channelEmoteSetId)) {
-                            delete Chat.info.emotes[emote.old_value.name];
-                            Chat.info.emotes[emote.value.name] = Chat.stv.emoteToChatisEmote(emote.value.data, false);
-                        }
-                        if (data.body.id === Chat.stv.channelEmoteSetId) // Updates are about the channel emote set
+
+                    for (const update of emotesUpdated) {
+                        const [oldEmote, newActiveEmote] = [update.old_value, update.value];
+                        if (!personalEmoteSet) {
+                            Chat.info.emotes.delete(oldEmote.name);
+                            Chat.info.emotes.set(newActiveEmote.name, Chat.stv.activeEmoteToChatisEmote(newActiveEmote, false));
                             showFloat(9, '7TV emote update!\n' + 'UPDATE:\n'
-                                + strmax(emote.old_value.name, 13) + ' ->\n' + strmax(emote.value.name, 16),
+                                + strmax(oldEmote.name, 13) + ' ->\n' + strmax(newActiveEmote.name, 16),
                                 3*1000);
+                        } else {
+                            const username = await Chat.stv.getUsernameById(newActiveEmote.actor_id);
+                            if (username) {
+                                Chat.removePersonalEmote(username, oldEmote.name);
+                                Chat.addPersonalEmote(username, newActiveEmote.name, Chat.stv.activeEmoteToChatisEmote(newActiveEmote, false));
+                            }
+                        }
                     }
 
                     for (const emote of emotesRemoved) {
-                        if (!Chat.info.noPersonalEmotes.channels.has(Chat.info.channel) || (data.body.id === Chat.stv.channelEmoteSetId)) {
+                        if (!personalEmoteSet) {
                             // console.log("[ChatIS][7tv] EventAPI emote remove:", emote.name);
-                            delete Chat.info.emotes[emote.name];
-                        }
-                        if (data.body.id === Chat.stv.channelEmoteSetId) // Updates are about the channel emote set
+                            Chat.info.emotes.delete(emote.name);
                             showFloat(9, '7TV emote update!\n' + 'REMOVE:\n' + strmax(emote.name, 16), 3*1000);
-                    }
-                    for (const emote of emotesAdded) {
-                        if (!Chat.info.noPersonalEmotes.channels.has(Chat.info.channel) || (data.body.id === Chat.stv.channelEmoteSetId)) {
-                            // console.log("[ChatIS][7tv] EventAPI emote add:", emote.name, " ", Chat.stv.emoteToChatisEmote(emote, false));
-                            Chat.info.emotes[emote.name] = Chat.stv.emoteToChatisEmote(emote, false);
+                        } else {
+                            const username = await Chat.stv.getUsernameById(emote.actor_id);
+                            Chat.removePersonalEmote(username, emote.name);
                         }
-                        if (data.body.id === Chat.stv.channelEmoteSetId) // Updates are about the channel emote set
-                            showFloat(9, '7TV emote update!\n' + 'ADD:\n' + strmax(emote.name, 16), 3*1000);
+                    }
+                    for (const activeEmote of emotesAdded) {
+                        if (!personalEmoteSet) {
+                            // console.log("[ChatIS][7tv] EventAPI emote add:", emote.name, " ", Chat.stv.activeEmoteToChatisEmote(activeEmote, false));
+                            Chat.info.emotes.set(activeEmote.name, Chat.stv.activeEmoteToChatisEmote(activeEmote, false));
+                            showFloat(9, '7TV emote update!\n' + 'ADD:\n' + strmax(activeEmote.name, 16), 3*1000);
+                        } else {
+                            const username = await Chat.stv.getUsernameById(activeEmote.actor_id);
+                            Chat.addPersonalEmote(username, activeEmote.name, Chat.stv.activeEmoteToChatisEmote(activeEmote, false));
+                        }
                     }
 
                     console.debug("[ChatIS][7tv] EventAPI emotes added:", emotesAdded, "emotes removed:", emotesRemoved);
@@ -798,16 +898,98 @@ var Chat = {
             return namepaints;
         },
 
-        emoteToChatisEmote: function (seventvEmote, global) {
-            const webpFiles = seventvEmote.host.files
+        apiV3GetCached: function (endpoint, cacheMap, key, accessor = (v) => v, fetchIfMissing, asyncWait) {
+            if (cacheMap.has(key))
+                if (asyncWait)
+                    return Promise.resolve(cacheMap.get(key));
+                else
+                    return cacheMap.get(key);
+            
+            if (!fetchIfMissing)
+                if (asyncWait)
+                    return Promise.resolve(null);
+                else
+                    return null;
+
+            const promise = (async () => {
+                const res = await (await fetch(`https://7tv.io/v3/${endpoint}/${key}`)).json();
+                if (res) {
+                    const value = accessor(res);
+                    if (value !== undefined) {
+                        cacheMap.set(key, value);
+                        return value;
+                    } else {
+                        cacheMap.set(key, null);
+                        return null;
+                    }
+                } else {
+                    cacheMap.set(key, null);
+                    return null;
+                }
+            })();
+
+            if (asyncWait)
+                return promise;
+            else
+                return null;
+        },
+        getUsernameById: function (userId, fetchIfMissing = true, asyncWait = true) {
+            return Chat.stv.apiV3GetCached(
+                'users',
+                Chat.cache.stv.userIdToUsername,
+                userId,
+                (res) => res.username,
+                fetchIfMissing,
+                asyncWait
+            );
+        },
+        getEmoteSetOwnerUsername: function (emoteSetId, fetchIfMissing = true, asyncWait = true) {
+            return Chat.stv.apiV3GetCached(
+                'emote-sets',
+                Chat.cache.stv.emoteSetIdToOwnerUsername,
+                emoteSetId,
+                (res) => res.owner ? res.owner.username : null,
+                fetchIfMissing,
+                asyncWait
+            );
+        },
+
+        activeEmoteToChatisEmote: function (stvActiveEmote, global) {
+            const activeName = stvActiveEmote.name;
+            const originalName = stvActiveEmote.data.name;
+            let webpFiles = stvActiveEmote.data.host.files
                 .filter(file => file.format === 'WEBP');
+            webpFiles.sort((a, b) => a.width - b.width);
             const maxSizeName = webpFiles[webpFiles.length - 1].name;
+            const zwAndOverrides = stvV3ActiveEmoteFlagsParse(stvActiveEmote.flags);
+            const flags = stvV3EmoteFlagsParse(stvActiveEmote.data.flags);
             return {
                 platform: 'stv',
-                id: seventvEmote.id,
-                image: 'https:' + seventvEmote.host.url + '/' + (maxSizeName || '4x.webp'),
+                id: stvActiveEmote.data.id,
+                image: 'https:' + stvActiveEmote.data.host.url + '/' + (maxSizeName || '3x.webp'),
                 global: global,
-                zeroWidth: (seventvEmote.flags & 256) !== 0 // EmoteFlagsZeroWidth = 256
+                listed: stvActiveEmote.data.listed,
+                zeroWidth: zwAndOverrides.ZERO_WIDTH || flags.ZERO_WIDTH,
+                originalName: (activeName === originalName) ? null : originalName,
+                // overrideTwitchGlobal: zwAndOverrides.OVERRIDE_TWITCH_GLOBAL,
+                // overrideTwitchSubscriber: zwAndOverrides.OVERRIDE_TWITCH_SUBSCRIBER,
+                // overrideBttv: zwAndOverrides.OVERRIDE_BETTER_TTV,
+            }
+        },
+
+        emoteToChatisEmote: function (stvEmote, global) {
+            const webpFiles = stvEmote.host.files
+                .filter(file => file.format === 'WEBP');
+            const maxSizeName = webpFiles[webpFiles.length - 1].name;
+            const flags = stvV3EmoteFlagsParse(stvEmote.flags);
+            return {
+                platform: 'stv',
+                id: stvEmote.id,
+                image: 'https:' + stvEmote.host.url + '/' + (maxSizeName || '4x.webp'),
+                global: global,
+                listed: stvEmote.listed,
+                zeroWidth: flags.ZERO_WIDTH,
+                originalName: null,
             }
         }
     },
@@ -874,7 +1056,7 @@ var Chat = {
     },
 
     loadEmotes: function(channelID) {
-        Chat.info.emotes = {};
+        // Chat.info.emotes = new Map();
         // Load BTTV, FFZ and 7TV emotes
 
         let ffzPromise = new Promise(function(resolve, reject) {
@@ -890,16 +1072,16 @@ var Chat = {
                             if (emote.images['4x'])
                                 upscale = false;
                             // TODO: Proper emote priority
-                            // if (Chat.info.emotes[emote.code]) {
-                            //     if ((endpoint !== 'emotes/global') && Chat.info.emotes[emote.code].global)
-                                    Chat.info.emotes[emote.code] = {
+                            // if (Chat.info.emotes.has(emote.code)) {
+                            //     if ((endpoint !== 'emotes/global') && Chat.info.emotes.get(emote.code).global)
+                                    Chat.info.emotes.set(emote.code, {
                                         platform: 'ffz',
                                         id: emote.id,
                                         image: imageUrl,
                                         upscale: upscale,
                                         global: endpoint === 'emotes/global',
                                         zeroWidth: false
-                                    };
+                                    });
                             // }
                         });
                         if (index === endpoints.length - 1) {
@@ -910,7 +1092,7 @@ var Chat = {
             })();
         });
 
-        let bttvZerowidth = [
+        let bttvZeroWidth = [
             '5e76d399d6581c3724c0f0b8', // cvMask
             '5e76d338d6581c3724c0f0b2', // cvHazmat
             '567b5b520e984428652809b6', // SoSnowy
@@ -918,7 +1100,7 @@ var Chat = {
             '567b5c080e984428652809ba', // CandyCane
             '567b5dc00e984428652809bd', // ReinDeer
             '5849c9c8f52be01a7ee5f79e', // TopHat
-            '58487cc6f52be01a7ee5f205' // SantaHat
+            '58487cc6f52be01a7ee5f205', // SantaHat
         ];
         let bttvPromise = new Promise(function(resolve, reject) {
             (async () => {
@@ -931,13 +1113,13 @@ var Chat = {
                             res = res.channelEmotes.concat(res.sharedEmotes);
                         }
                         res.forEach(emote => {
-                            Chat.info.emotes[emote.code] = {
+                            Chat.info.emotes.set(emote.code, {
                                 platform: 'bttv',
                                 id: emote.id,
                                 image: 'https://cdn.betterttv.net/emote/' + emote.id + '/3x',
                                 global: endpoint === 'emotes/global',
-                                zeroWidth: bttvZerowidth.includes(emote.id)
-                            };
+                                zeroWidth: bttvZeroWidth.includes(emote.id)
+                            });
                         });
                         if (index === endpoints.length - 1) {
                             resolve(true);
@@ -955,14 +1137,15 @@ var Chat = {
                 setTimeout(() => { resolve(false); }, 3000);
 
                 let endpoints = ['emote-sets/global', 'users/twitch/' + encodeURIComponent(channelID)];
-                // Chat.info.emotes[emote.name] = Chat.stv.emoteToChatisEmote(emote, false);
+                // Chat.info.emotes.set(emote.name, Chat.stv.emoteToChatisEmote(emote, false));
                 endpoints.forEach((endpoint, index) => {
                     $.getJSON('https://7tv.io/v3/' + endpoint).done(function (res) {
                         const emotes = (res.emotes || (res.emote_set || {}).emotes) || [];
-                        emotes.forEach(emoteWithMeta => {
-                            const emote = emoteWithMeta.data;
-                            Chat.info.emotes[emoteWithMeta.name] = Chat.stv.emoteToChatisEmote(emote,
-                                endpoint === 'emote-sets/global');
+                        emotes.forEach(activeEmote => {
+                            Chat.info.emotes.set(activeEmote.name, Chat.stv.activeEmoteToChatisEmote(
+                                activeEmote,
+                                endpoint === 'emote-sets/global'
+                            ));
                         });
                         if (index === endpoints.length - 1) {
                             resolve(true);
@@ -1713,16 +1896,27 @@ var Chat = {
                 });
             }
 
-            Object.entries(Chat.info.emotes).forEach(emote => {
-                if (message.search(escapeRegExp(emote[0])) > -1) {
-                    replacements[emote[0]] =
-                        '<span class="emote-container">' +
-                        '<img class="emote'
-                        + (emote[1].upscale ? ' upscale' : '')
-                        + (emote[1].zeroWidth ? ' zerowidth' : '') + '"'
-                        + (emote[1].zeroWidth ? ' onload="Chat.zw(this)"' : '')
-                        + ' src="' + emote[1].image + '" />' +
-                        '</span>';
+            function makeEmoteElement(emote) {
+                return (
+                    '<span class="emote-container">' +
+                    '<img class="emote'
+                    + (emote.upscale ? ' upscale' : '')
+                    + (emote.zeroWidth ? ' zerowidth' : '') + '"'
+                    + (emote.zeroWidth ? ' onload="Chat.zw(this)"' : '')
+                    + ' src="' + emote.image + '" />' +
+                    '</span>'
+                );
+            }
+
+            // TODO: Probably should rewrite this all to message.split(' ') and then join at the end...
+            Chat.info.emotes.forEach((emote, name) => {
+                if (message.search(escapeRegExp(name)) > -1) {
+                    replacements[name] = makeEmoteElement(emote);
+                }
+            });
+            Chat.getPersonalEmotesForUser(nick).forEach((emote, name) => {
+                if (message.search(escapeRegExp(name)) > -1) {
+                    replacements[name] = makeEmoteElement(emote);
                 }
             });
 
@@ -2078,9 +2272,9 @@ var Chat = {
                         }
                         let link = (text.match(/((([A-Za-z]{3,9}:(?:\/\/)?)(?:[\-;:&=\+\$,\w]+@)?[A-Za-z0-9\.\-]+|(?:www\.|[\-;:&=\+\$,\w]+@)[A-Za-z0-9\.\-]+)((?:\/[\+~%\/\.\w\-_]*)?\??(?:[\-\+=&;%@\.\w_]*)#?(?:[\.\!\/\\\w]*))?)/) || [])[1];
                         if (!link)
-                            link = (Chat.info.emotes[
+                            link = (Chat.info.emotes.get(
                                 ( text.substr('!chatis img '.length).match(/([^\s]+)/) || [] )[1] || ''
-                                ] || {}).image;
+                            ) || {}).image;
                         let pAR = (text.match(/ -(x)/) || [])[1] || false; // Preserve Aspect Ratio
                         let fg = (text.match(/ -(f)/) || [])[1] || false; // Make the image foreground (bg by default)
                         let heightMatch = (text.match(/ -h ([\d]+)/) || [])[1];
