@@ -1,4 +1,4 @@
-const version = '2.34.10+536';
+const version = '2.34.11+537';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -268,6 +268,7 @@ var Chat = {
                 'pion_limon',
                 'tipo_lon',
                 'murgois',
+                'limitlesslevon',
             ])
         },
         noPersonalEmotes: {
