@@ -1,4 +1,4 @@
-const version = '2.34.12+538';
+const version = '2.34.13+539';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -463,6 +463,11 @@ var Chat = {
             },
             
             connectWs: (resume) => {
+                // 7tv EventAPI doesn't actually support RESUME since the rewrite from Go to Rust
+                // Man I love 7tv...
+                // Remove this if 7tv ever decides to support RESUME again... 
+                resume = false;
+
                 Chat.stv.eventApi.closeWs();
                 
                 const ops = {
