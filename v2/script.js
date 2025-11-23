@@ -1,4 +1,4 @@
-const version = '2.34.11+537';
+const version = '2.34.12+538';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -339,7 +339,7 @@ var Chat = {
             ws: null,
             sessionId: null,
             ackCount: 0,
-            resumeAck: false,
+            resumeSuccess: false,
 
             wsCloseCodes: Object.fromEntries(wsCloseCodesPrecursor.map((pair) => [pair[1], pair[0]])),
             wsCloseCodeNames: new Map(wsCloseCodesPrecursor),
@@ -459,7 +459,7 @@ var Chat = {
                 }
                 
                 Chat.stv.eventApi.ackCount = 0;
-                Chat.stv.eventApi.resumeAck = false;
+                Chat.stv.eventApi.resumeSuccess = false;
             },
             
             connectWs: (resume) => {
@@ -506,8 +506,8 @@ var Chat = {
                                     session_id: Chat.stv.eventApi.sessionId,
                                 });
                                 setTimeout(() => {
-                                    if (!Chat.stv.eventApi.resumeAck) {
-                                        Chat.stv.eventApi.reconnect.now(false, "failed to resume");
+                                    if (!Chat.stv.eventApi.resumeSuccess) {
+                                        Chat.stv.eventApi.reconnect.now(false, "failed to resume - ACK timeout");
                                     }
                                 }, 5 * 1000);
                             } else {
@@ -528,8 +528,12 @@ var Chat = {
                         case ops.ACK: {
                             Chat.stv.eventApi.ackCount = Chat.stv.eventApi.ackCount + 1;
                             if (data.d.command === "RESUME") {
-                                Chat.stv.eventApi.resumeAck = true;
-                                console.debug("[ChatIS][7tv] EventAPI, successfully RESUMEd with sessionId:", Chat.stv.eventApi.sessionId);
+                                Chat.stv.eventApi.resumeSuccess = data.d.data.success;
+                                if (!Chat.stv.eventApi.resumeSuccess) {
+                                    Chat.stv.eventApi.reconnect.now(false, "failed to resume - server rejected");
+                                } else {
+                                    console.debug("[ChatIS][7tv] EventAPI, successfully RESUMEd with sessionId:", Chat.stv.eventApi.sessionId);
+                                }
                             }
                         } break;
                         case ops.ERROR: {
