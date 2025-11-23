@@ -1,4 +1,4 @@
-const version = '2.35.0+540';
+const version = '2.35.1+541';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -258,6 +258,7 @@ var Chat = {
         reverseLineOrder: ('reverse_line_order' in $.QueryString ? ($.QueryString.reverse_line_order.toLowerCase() === 'true') : false),
         horizontal: ('horizontal' in $.QueryString ? ($.QueryString.horizontal.toLowerCase() === 'true') : false),
         singleChatter: ('single_chatter' in $.QueryString ? $.QueryString.single_chatter.toLowerCase() : ""),
+        show7tvUnlisted: ('show_7tv_unlisted' in $.QueryString ? ($.QueryString.show_7tv_unlisted.toLowerCase() === 'true') : false),
         ttsReadsChat: false,
         // Map<name: string, emote: ChatisEmote>
         emotes: new Map(),
@@ -1079,6 +1080,7 @@ var Chat = {
                                         id: emote.id,
                                         image: imageUrl,
                                         upscale: upscale,
+                                        listed: true,
                                         global: endpoint === 'emotes/global',
                                         zeroWidth: false
                                     });
@@ -1117,6 +1119,7 @@ var Chat = {
                                 platform: 'bttv',
                                 id: emote.id,
                                 image: 'https://cdn.betterttv.net/emote/' + emote.id + '/3x',
+                                listed: true,
                                 global: endpoint === 'emotes/global',
                                 zeroWidth: bttvZeroWidth.includes(emote.id)
                             });
@@ -1910,14 +1913,16 @@ var Chat = {
 
             // TODO: Probably should rewrite this all to message.split(' ') and then join at the end...
             Chat.info.emotes.forEach((emote, name) => {
-                if (message.search(escapeRegExp(name)) > -1) {
-                    replacements[name] = makeEmoteElement(emote);
-                }
+                if (message.search(escapeRegExp(name)) > -1)
+                    if (emote.listed || (emote.platform === 'stv' && Chat.info.show7tvUnlisted))
+                        replacements[name] = makeEmoteElement(emote);
+                
             });
             Chat.getPersonalEmotesForUser(nick).forEach((emote, name) => {
-                if (message.search(escapeRegExp(name)) > -1) {
-                    replacements[name] = makeEmoteElement(emote);
-                }
+                if (message.search(escapeRegExp(name)) > -1)
+                    if (emote.listed || (emote.platform === 'stv' && Chat.info.show7tvUnlisted))
+                        replacements[name] = makeEmoteElement(emote);
+                
             });
 
             message = escapeHtml(message);
