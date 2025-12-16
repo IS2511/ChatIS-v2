@@ -1,4 +1,4 @@
-const version = '2.35.1+541';
+const version = '2.35.2+542';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -1839,11 +1839,28 @@ var Chat = {
                 if (tinycolor(info.color).getBrightness() <= 50) color = tinycolor(info.color).lighten(30);
                 else color = info.color;
             } else {
-                const twitchColors = ["#FF0000", "#0000FF", "#008000", "#B22222", "#FF7F50", "#9ACD32", "#FF4500", "#2E8B57", "#DAA520", "#D2691E", "#5F9EA0", "#1E90FF", "#FF69B4", "#8A2BE2", "#00FF7F"];
-                color = twitchColors[nick.charCodeAt(0) % 15];
+                const twitchColors = [
+                    "#FF0000", // Red
+                    "#0000FF", // Blue
+                    "#008000", // Green
+                    "#B22222", // FireBrick
+                    "#FF7F50", // Coral
+                    "#9ACD32", // YellowGreen
+                    "#FF4500", // OrangeRed
+                    "#2E8B57", // SeaGreen
+                    "#DAA520", // GoldenRod
+                    "#D2691E", // Chocolate
+                    "#5F9EA0", // CadetBlue
+                    "#1E90FF", // DodgerBlue
+                    "#FF69B4", // HotPink
+                    "#8A2BE2", // BlueViolet
+                    "#00FF7F", // SpringGreen
+                ];
+                color = twitchColors[(nick.charCodeAt(0) + nick.charCodeAt(nick.length - 1)) % twitchColors.length];
             }
             if (nick.toLowerCase() === '[chatis]') color = '#FFFFFF';
             $username.css('color', color);
+            $chatLine[0].style.setProperty("--chatis-v2-twitch-username-color", color);
             $username.html(info['display-name'] ? info['display-name'] : nick);
             // if (Chat.info.seventvPaints) {
             {
