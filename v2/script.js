@@ -1,4 +1,4 @@
-const version = '2.35.2+542';
+const version = '2.35.3+543';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -1699,6 +1699,7 @@ var Chat = {
         };
         let badge_to_role = {
             "moderator": "mod",
+            "lead moderator": "mod",
             "vip": "vip",
             "subscriber": "sub",
             "broadcaster": "broadcaster",
@@ -1784,7 +1785,7 @@ var Chat = {
                 }
 
                 var badges = [];
-                const priorityBadges = ['predictions', 'admin', 'global_mod', 'staff', 'twitchbot', 'broadcaster', 'moderator', 'vip'];
+                const priorityBadges = ['predictions', 'admin', 'global_mod', 'staff', 'twitchbot', 'broadcaster', 'lead moderator', 'moderator', 'vip'];
                 if (typeof(info.badges) === 'string') {
                     info.badges.split(',').forEach(badge => {
                         badge = badge.split('/');
@@ -1802,7 +1803,8 @@ var Chat = {
                         var $badge = $('<img/>');
                         $badge.addClass('badge');
                         $badge.attr('src', badge.url);
-                        if (badge.description === 'moderator') $modBadge = $badge;
+                        if ((badge.description === 'moderator') || (badge.description === 'lead moderator'))
+                            $modBadge = $badge;
                         $userInfo.append($badge);
                     }
                 });
@@ -2100,7 +2102,7 @@ var Chat = {
             if (typeof (message.tags.badges) === 'string') {
                 message.tags.badges.split(',').forEach(badge => {
                     badge = badge.split('/');
-                    if (badge[0] === 'moderator') {
+                    if ((badge[0] === 'moderator') || (badge[0] === 'lead moderator')) {
                         if (!Chat.cache.globalMods.includes(nick.toLowerCase()))
                             Chat.cache.globalMods.push(nick.toLowerCase());
                     }
@@ -2137,7 +2139,7 @@ var Chat = {
             if (typeof (message.tags.badges) === 'string') {
                 message.tags.badges.split(',').forEach(badge => {
                     badge = badge.split('/');
-                    if (badge[0] === 'moderator') {
+                    if ((badge[0] === 'moderator') || (badge[0] === 'lead moderator')) {
                         accessLevel = 700;
                     }
                 });
@@ -2149,11 +2151,11 @@ var Chat = {
         if (typeof(Chat.cache.badges[nick.toLowerCase()]) === 'string') {
             Chat.cache.badges[nick.toLowerCase()].split(',').forEach(badge => {
                 badge = badge.split('/');
-                if (badge[0] === 'moderator' && accessLevel === 700)
+                if ((badge[0] === 'moderator' || badge[0] === 'lead moderator') && accessLevel === 700)
                     accessLevel = 750; // Global mod + channel mod
 
                 if (accessLevel < 500)
-                    if (badge[0] === 'moderator') accessLevel = 500;
+                    if (badge[0] === 'moderator' || badge[0] === 'lead moderator') accessLevel = 500;
                 if (accessLevel < 1000)
                     if (badge[0] === 'broadcaster') accessLevel = 1000;
             });
@@ -2534,7 +2536,7 @@ var Chat = {
             if (typeof(message.tags.badges) === 'string') {
                 message.tags.badges.split(',').forEach(badge => {
                     badge = badge.split('/');
-                    if (badge[0] === "moderator" || badge[0] === "broadcaster") {
+                    if ((badge[0] === "moderator") || (badge[0] === "lead moderator") || badge[0] === "broadcaster") {
                         flag = true;
                         return;
                     }
