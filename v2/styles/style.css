@@ -64,3 +64,91 @@ body {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* Universal chat font size magic */
+
+:root {
+    /* Variables that can be overridden by users */
+    /* Values here are from the 'small' profile */
+    /* --chat-font-size: 20; */
+
+    /* These dynamic values almost match the hand-defined 'small', 'medium' and 'large' settings. */
+    /* I don't want to fit polynomials to achieve 100% backward compatibility :Dies: */
+    /* UPD: Scratch that. I'm doing quadratic regression. Yes, this will be *exactly* equal to the hand-defined values. */
+    /* Thanks mycurvefit.com, I didn't want to write Python scripts or god forbid open MATLAB. */
+
+    /* Popular unit choices: 'px' (default), 'em', 'rem' */
+    /* More possible units: https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Styling_basics/Values_and_units */
+    /* NOTE: Currently only 'px' is supported. Honestly, just don't touch this. */
+    --chat-v2-font-size-unit: 1px;
+
+    --chat-v2-font-size: calc(var(--chat-font-size) * var(--chat-v2-font-size-unit));
+    --chat-v2-font-size-pow2: calc(var(--chat-font-size) * var(--chat-font-size) * var(--chat-v2-font-size-unit));
+
+    --chat-v2-line-height: round(nearest, (-14.38776*var(--chat-v2-font-size-unit) + 2.47449*var(--chat-v2-font-size) - 0.0127551*var(--chat-v2-font-size-pow2)), var(--chat-v2-font-size-unit));
+    --chat-v2-badge-size: round(nearest, (-1.142857*var(--chat-v2-font-size-unit) + 0.8571429*var(--chat-v2-font-size)), var(--chat-v2-font-size-unit));
+    --chat-v2-badge-margin-between: round(nearest, (-2.591837*var(--chat-v2-font-size-unit) + 0.2806122*var(--chat-v2-font-size) - 0.00255102*var(--chat-v2-font-size-pow2)), var(--chat-v2-font-size-unit));
+    --chat-v2-badge-margin-bottom: round(nearest, (-3.020408*var(--chat-v2-font-size-unit) + 0.3520408*var(--chat-v2-font-size) - 0.00255102*var(--chat-v2-font-size-pow2)), var(--chat-v2-font-size-unit));
+    --chat-v2-badge-margin-after: round(nearest, (-3.020408*var(--chat-v2-font-size-unit) + 0.3520408*var(--chat-v2-font-size) - 0.00255102*var(--chat-v2-font-size-pow2)), var(--chat-v2-font-size-unit));
+    --chat-v2-colon-margin-right: round(nearest, (-0.5714286*var(--chat-v2-font-size-unit) + 0.4285714*var(--chat-v2-font-size)), var(--chat-v2-font-size-unit));
+
+    --chat-v2-emote-max-height: round(nearest, (2.44898*var(--chat-v2-font-size-unit) + 1.076531*var(--chat-v2-font-size) + 0.00255102*var(--chat-v2-font-size-pow2)), var(--chat-v2-font-size-unit));
+    --chat-v2-emote-max-width: calc(var(--chat-v2-emote-max-height) * 3);
+    --chat-v2-emote-margin-right: round(nearest, -(-3.020408*var(--chat-v2-font-size-unit) + 0.3520408*var(--chat-v2-font-size) - 0.00255102*var(--chat-v2-font-size-pow2)), var(--chat-v2-font-size-unit));
+    --chat-v2-upscale-height: var(--chat-v2-emote-max-height);
+    --chat-v2-emoji-height: round(nearest, (-4.020408*var(--chat-v2-font-size-unit) + 1.352041*var(--chat-v2-font-size) - 0.00255102*var(--chat-v2-font-size-pow2)), var(--chat-v2-font-size-unit));
+
+    --chat-v2-cheer-bits-font-weight: round(nearest, (842.8571*var(--chat-v2-font-size-unit) - 7.142857*var(--chat-v2-font-size)), 1);
+    --chat-v2-cheer-bits-margin-left: round(nearest, (-2.591837*var(--chat-v2-font-size-unit) + 0.2806122*var(--chat-v2-font-size) - 0.00255102*var(--chat-v2-font-size-pow2)), var(--chat-v2-font-size-unit));
+    --chat-v2-cheer-bits-margin-right: round(nearest, (-0.2857143*var(--chat-v2-font-size-unit) + 0.2142857*var(--chat-v2-font-size)), var(--chat-v2-font-size-unit));
+    --chat-v2-cheer-emote-max-height: var(--chat-v2-emote-max-height);
+    --chat-v2-cheer-emote-margin-bottom: round(nearest, -(2.020408*var(--chat-v2-font-size-unit) + 0.1479592*var(--chat-v2-font-size) + 0.00255102*var(--chat-v2-font-size-pow2)), var(--chat-v2-font-size-unit));
+}
+
+#chat_container {
+    font-size: var(--chat-v2-font-size);
+}
+
+.chat_line {
+    line-height: var(--chat-v2-line-height);
+}
+
+.badge {
+    width: var(--chat-v2-badge-size);
+    height: var(--chat-v2-badge-size);
+    margin-right: var(--chat-v2-badge-margin-between);
+    margin-bottom: var(--chat-v2-badge-margin-bottom);
+}
+
+.badge:last-of-type {
+    margin-right: var(--chat-v2-badge-margin-after);
+}
+
+.colon {
+    margin-right: var(--chat-v2-colon-margin-right);
+}
+
+.cheer_bits {
+    font-weight: var(--chat-v2-cheer-bits-font-weight);
+    margin-left: var(--chat-v2-cheer-bits-margin-left);
+    margin-right: var(--chat-v2-cheer-bits-margin-right);
+}
+
+.cheer_emote {
+    max-height: var(--chat-v2-cheer-emote-max-height);
+    margin-bottom: var(--chat-v2-cheer-emote-margin-bottom);
+}
+
+.emote {
+    max-width: var(--chat-v2-emote-max-width);
+    max-height: var(--chat-v2-emote-max-height);
+    margin-right: var(--chat-v2-emote-margin-right);
+}
+
+.upscale {
+    height: var(--chat-v2-upscale-height);
+}
+
+.emoji {
+    height: var(--chat-v2-emoji-height);
+}
