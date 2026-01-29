@@ -263,7 +263,7 @@ input:focus {
 }
 
 #example.white {
-    background-color: white;
+    background-color: rgb(200, 200, 200);
 }
 
 #example .user_info {
