@@ -1,4 +1,4 @@
-const version = '2.35.3+543';
+const version = '2.35.4+545';
 
 function* entries(obj) {
     for (let key of Object.keys(obj)) {
@@ -1356,10 +1356,10 @@ var Chat = {
                     // });
                     $.getJSON('https://api.frankerfacez.com/v1/_room/id/' + encodeURIComponent(Chat.info.channelID)).done(function(res) {
                         if (res.room.moderator_badge) {
-                            Chat.info.badges['moderator:1'] = 'https://cdn.frankerfacez.com/room-badge/mod/' + Chat.info.channel + '/4/rounded';
+                            Chat.info.badges['moderator:1'] = 'https://cdn.frankerfacez.com/room-badge/mod/id/' + Chat.info.channelID + '/4/rounded';
                         }
                         if (res.room.vip_badge) {
-                            Chat.info.badges['vip:1'] = 'https://cdn.frankerfacez.com/room-badge/vip/' + Chat.info.channel + '/4';
+                            Chat.info.badges['vip:1'] = 'https://cdn.frankerfacez.com/room-badge/vip/id/' + Chat.info.channelID + '/4';
                         }
                     });
                 });
