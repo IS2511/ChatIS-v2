@@ -209,25 +209,25 @@ function textStrokeViaShadow(thickness, color = 'black') {
         return `${x}px ${y}px ${color}`;
     }
 
-    let textShadow = 'text-shadow: ';
+    let textShadow = '';
     for (let angle = 0; angle < 2 * Math.PI; angle += 1/thickness) {
         if (angle !== 0)
             textShadow += ', ';
         textShadow += shadowLayer(Math.cos(angle) * thickness, Math.sin(angle) * thickness, color);
     }
-    textShadow += ';';
 
     return textShadow;
 }
 
+function textStrokeStyle(thickness, color = 'black') {
+    return `text-shadow: ${textStrokeViaShadow(thickness, color)};`;
+}
+
 // See https://github.com/IS2511/ChatIS/issues/16#issuecomment-2745986759
 function applyTextStroke($elem, thickness, color = 'black') {
-    if (obsVersion && obsVersion.major >= 31) {
-        $elem.css('paint-order', 'stroke fill');
-        $elem.css('-webkit-text-stroke', thickness + 'px ' + color);
-    } else {
-        $elem.css('text-shadow', textStrokeViaShadow(thickness, color));
-    }
+    $elem.css('paint-order', '');
+    $elem.css('-webkit-text-stroke', '0px');
+    $elem.css('text-shadow', textStrokeViaShadow(thickness, color));
 }
 
 
@@ -998,11 +998,9 @@ var Chat = {
 
 
     initFlags: function () {
-        // See https://github.com/IS2511/ChatIS/issues/16#issuecomment-2745986759
+        // Native text stroke still breaks some glyph interiors in Chromium/OBS,
+        // so keep the shadow-based outline path enabled consistently.
         Chat.flags.usingHackyStrokeViaShadow = true;
-        if ((obsVersion && obsVersion.major >= 31)) {
-            Chat.flags.usingHackyStrokeViaShadow = false;
-        }
     },
 
     reportLoading: function () {
@@ -1240,10 +1238,7 @@ var Chat = {
                         } break;
                     }
 
-                    let style = `paint-order: stroke fill; -webkit-text-stroke: ${thickness}px black;`;
-                    if (Chat.flags.usingHackyStrokeViaShadow) {
-                        style = textStrokeViaShadow(thickness);
-                    }
+                    let style = textStrokeStyle(thickness);
 
                     $("<style>#chat_container { " + style + " }</style>").appendTo("head");
                 }
