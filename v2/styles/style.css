@@ -28,7 +28,15 @@ body {
 
 .cheer_bits {
     font-size: 0.6em;
-    -webkit-text-stroke: 1px black;
+    text-shadow:
+        1px 0 black,
+        -1px 0 black,
+        0 1px black,
+        0 -1px black,
+        0.7px 0.7px black,
+        -0.7px 0.7px black,
+        0.7px -0.7px black,
+        -0.7px -0.7px black;
 }
 
 .emote {
