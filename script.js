@@ -62,18 +62,29 @@ function fontCustomUpdate(event) {
     // $("#example").css("font-family", "'"+$fontCustom.val()+"';")
 }
 
+function textStrokeViaShadow(thickness, color = 'black') {
+    const shadowLayers = [];
+
+    for (let angle = 0; angle < 2 * Math.PI; angle += 1 / thickness) {
+        const x = parseFloat((Math.cos(angle) * thickness).toFixed(5));
+        const y = parseFloat((Math.sin(angle) * thickness).toFixed(5));
+        shadowLayers.push(`${x}px ${y}px ${color}`);
+    }
+
+    return shadowLayers.join(', ');
+}
+
 function strokeUpdate(event) {
-    $('link[class="stroke"]').remove();
+    $('link[class="stroke"], style[class="stroke"]').remove();
 
     if ($stroke.val() === "0") return // if "off is selected"
 
-    const stroke = FuckingSettings.strokes[Number($stroke.val()) - 1]
+    const thickness = Number($stroke.val());
 
-    $("<link/>", {
-        rel: "stylesheet",
+    $("<style/>", {
         type: "text/css",
         class: "stroke",
-        href: `styles/stroke_${stroke}.css`
+        text: `#example { text-shadow: ${textStrokeViaShadow(thickness)}; }`
     }).appendTo("head");
 }
 
@@ -339,4 +350,3 @@ $brightness.click(changePreview);
 $url.click(copyUrl);
 $alert.click(showUrl);
 $reset.click(resetForm);
-
